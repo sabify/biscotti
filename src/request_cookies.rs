@@ -358,7 +358,7 @@ mod tests {
     fn check_case<'a>(
         string: &'a str,
         processor: &Processor,
-        expected: Result<RequestCookies<'a>, Box<dyn Matcher<ActualT = String>>>,
+        expected: Result<RequestCookies<'a>, Box<dyn for<'m> Matcher<&'m str>>>,
     ) {
         let actual = RequestCookies::parse_header(string, processor);
         match &actual {
@@ -382,9 +382,9 @@ mod tests {
                     Actual: {err},\n\
                     {}\n",
                     matcher.describe(MatcherResult::Match),
-                    matcher.explain_match(&source)
+                    matcher.explain_match(source.as_str())
                 );
-                assert!(matcher.matches(&source).is_match(), "{error}");
+                assert!(matcher.matches(source.as_str()).is_match(), "{error}");
             }
         }
     }
@@ -468,12 +468,8 @@ mod tests {
         }
     }
 
-    fn boxed<T>(matcher: impl Matcher<ActualT = T> + 'static) -> Box<dyn Matcher<ActualT = T>> {
-        Box::new(matcher)
-    }
-
-    fn err_str(s: &'static str) -> Box<dyn Matcher<ActualT = String>> {
-        boxed(displays_as(eq(s)))
+    fn err_str(s: &'static str) -> Box<dyn for<'m> Matcher<&'m str>> {
+        Box::new(displays_as(eq(s)))
     }
 
     #[test]

@@ -3,7 +3,7 @@ use anyhow::Context;
 use base64::Engine;
 use base64::prelude::BASE64_URL_SAFE_NO_PAD;
 use hmac::digest::OutputSizeUser;
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use sha2::Sha256;
 
 #[derive(Clone, Copy)]

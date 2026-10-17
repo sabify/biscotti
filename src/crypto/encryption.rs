@@ -1,8 +1,8 @@
 use crate::Key;
+use aes_gcm_siv::aead::array::Array;
 use aes_gcm_siv::aead::consts::U32;
-use aes_gcm_siv::aead::generic_array::GenericArray;
 use aes_gcm_siv::aead::{Aead, Payload};
-use aes_gcm_siv::{AeadInPlace, Aes256GcmSiv, KeyInit};
+use aes_gcm_siv::{AeadInOut, Aes256GcmSiv, KeyInit, Nonce};
 use anyhow::Context;
 use base64::Engine;
 use base64::prelude::BASE64_URL_SAFE_NO_PAD;
@@ -13,7 +13,7 @@ pub(crate) const NONCE_LEN: usize = 12;
 pub(crate) const TAG_LEN: usize = 16;
 
 #[derive(Clone, Copy)]
-pub(crate) struct EncryptionKey(GenericArray<u8, U32>);
+pub(crate) struct EncryptionKey(Array<u8, U32>);
 
 impl std::fmt::Debug for EncryptionKey {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -37,7 +37,7 @@ impl EncryptionKey {
             .expect("Couldn't create HKDF from PRK")
             .expand(b"COOKIE;AEAD-AES-256-GCM-SIV", &mut derived)
             .expect("Failed to derive AEAD-AES-256-GCM-SIV key from PRK");
-        Self(GenericArray::from(derived))
+        Self(Array::from(derived))
     }
 
     /// Encrypts a cookie value using the given key.
@@ -54,14 +54,14 @@ impl EncryptionKey {
         // Fill nonce piece with random data.
         let mut rng = rand::rng();
         rng.fill_bytes(nonce);
-        let nonce = GenericArray::clone_from_slice(nonce);
+        let nonce = Nonce::try_from(&*nonce).expect("nonce has the wrong length");
 
         // Perform the actual sealing operation, using the cookie's name as
         // associated data to prevent value swapping.
         let aad = name;
         let aead = Aes256GcmSiv::new(&self.0);
         let aad_tag = aead
-            .encrypt_in_place_detached(&nonce, aad, in_out)
+            .encrypt_inout_detached(&nonce, aad, in_out.into())
             .expect("encryption failed!");
 
         // Copy the tag into the tag piece.
@@ -89,9 +89,10 @@ impl EncryptionKey {
             aad: name,
         };
 
+        let nonce = Nonce::try_from(nonce).expect("nonce has the wrong length");
         let aead = Aes256GcmSiv::new(&self.0);
         let s = aead
-            .decrypt(GenericArray::from_slice(nonce), payload)
+            .decrypt(&nonce, payload)
             .map_err(|_| anyhow::anyhow!("Failed to decrypt cookie value using AES-GCM"))?;
         String::from_utf8(s).context("Cookie value was not valid UTF-8")
     }
